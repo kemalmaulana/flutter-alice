@@ -15,4 +15,4 @@ dependencies:
   chopper: ^7.1.1+1
   overlay_support: ^2.1.0
   share_plus: ^7.2.2
-  rxdart: ^0.27.7
+  rxdart: ^0.28.0
