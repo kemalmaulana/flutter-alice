@@ -9,8 +9,8 @@ import 'package:http/http.dart';
 
 import 'alice_core.dart';
 
-class AliceChopperInterceptor
-    implements chopper.ResponseInterceptor, chopper.RequestInterceptor {
+// class AliceChopperInterceptor implements chopper.ResponseInterceptor, chopper.RequestInterceptor {
+class AliceChopperInterceptor implements chopper.Interceptor {
   /// AliceCore instance
   final AliceCore aliceCore;
 
@@ -116,5 +116,63 @@ class AliceChopperInterceptor
     aliceCore.addResponse(
         httpResponse, getRequestHashCode(response.base.request!));
     return response;
+  }
+
+  @override
+  FutureOr<chopper.Response<BodyType>> intercept<BodyType>(chopper.Chain<BodyType> chain) async {
+    var baseRequest = await chain.request.toBaseRequest();
+    AliceHttpCall call = AliceHttpCall(getRequestHashCode(baseRequest));
+    String endpoint = "";
+    String server = "";
+    if (chain.request.baseUri.path.isEmpty) {
+      List<String> split = chain.request.url.path.split("/");
+      if (split.length > 2) {
+        server = split[1] + split[2];
+      }
+      if (split.length > 4) {
+        endpoint = "/";
+        for (int splitIndex = 3; splitIndex < split.length; splitIndex++) {
+          endpoint += split[splitIndex] + "/";
+        }
+        endpoint = endpoint.substring(0, endpoint.length - 1);
+      }
+    } else {
+      endpoint = chain.request.url.path;
+      server = chain.request.baseUri.path;
+    }
+
+    call.method = chain.request.method;
+    call.endpoint = endpoint;
+    call.server = server;
+    call.client = "Chopper";
+    if (chain.request.baseUri.path.contains("https") ||
+        chain.request.uri.path.contains("https")) {
+      call.secure = true;
+    }
+
+    AliceHttpRequest aliceHttpRequest = AliceHttpRequest();
+
+    if (chain.request.body == null) {
+      aliceHttpRequest.size = 0;
+      aliceHttpRequest.body = "";
+    } else {
+      aliceHttpRequest.size = utf8.encode(chain.request.body).length;
+      aliceHttpRequest.body = chain.request.body;
+    }
+    aliceHttpRequest.time = DateTime.now();
+    aliceHttpRequest.headers = chain.request.headers;
+
+    String? contentType = "unknown";
+    if (chain.request.headers.containsKey("Content-Type")) {
+      contentType = chain.request.headers["Content-Type"];
+    }
+    aliceHttpRequest.contentType = contentType;
+    aliceHttpRequest.queryParameters = chain.request.parameters;
+
+    call.request = aliceHttpRequest;
+    call.response = AliceHttpResponse();
+
+    aliceCore.addCall(call);
+    return chain.proceed(chain.request);
   }
 }
